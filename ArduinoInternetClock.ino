@@ -8,13 +8,85 @@
 LiquidCrystal lcd(6,7,8,9,11,12);
 RTC_DS1307 rtc;
 
-DateTime now, old;
+unsigned long tick, tack;
 
-unsigned long stopWatchStart, stopWatchStop;
+struct clock{
+  DateTime time, old;
+  bool display = false;
+  int utcOfset = 0;
 
-uint32_t timerTime=0, oldTimer;
+  String data(){
+    String dataString;
+    if(time.hour() < 10) dataString += '0';
+    dataString += time.hour()+utcOfset; dataString += ':';
+    if(time.minute() < 10) dataString += '0';
+    dataString += time.minute(); dataString += ':';
+    if(time.second() < 10) dataString += '0';
+    dataString += time.second();
 
-bool timerFlag=0, stopWatchFlag=0;
+    if(time.second()%10 >= 0 && time.second()%10 <= 7){
+      dataString += "   ";
+      if(time.day() < 10) dataString += '0';
+      dataString += time.day(); dataString += '/';
+      if(time.month() < 10) dataString += '0';
+      dataString += time.month();
+    }
+    else{
+      dataString += "    ";
+      dataString += time.year();
+    }
+
+    return dataString;
+  }
+
+  void printToLcd(int line){
+    if (display){
+      if(old.second() != time.second()){
+        lcd.setCursor(0,line);
+        lcd.print(data());
+        old = time;
+      }
+    }
+  }
+};
+
+struct timer{
+  unsigned long timerTime, old;
+  bool display = false;
+  bool set;
+
+  String data(){
+    String dataString;
+    TimeSpan time(timerTime);
+    if(time.day() > 0){
+      dataString += time.day(); dataString += ' ';
+    }
+
+    if(time.hour() > 0){
+      dataString += time.hour(); dataString += ':';
+    }
+
+    if(time.minute() < 10) dataString += '0';
+    dataString += time.minute(); dataString += ':';
+    if(time.second() < 10) dataString += '0';
+    dataString += time.second();dataString += "  ";
+
+    return dataString;
+  }
+
+  void printToLcd(int line){
+    if (display){
+      if(old != timerTime){
+        lcd.setCursor(0,line);
+        lcd.print(data());
+        old = timerTime;
+      }
+    }
+  }
+};
+
+timer timer1;
+clock clock1;
 
 void setup(){
   Serial.begin(57600);
@@ -24,83 +96,24 @@ void setup(){
   pinMode(13,OUTPUT);
   digitalWrite(13,HIGH);
 
-  if (!rtc.isrunning())
-  rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  if (!rtc.isrunning()) rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  
+  timer1.display=1;
+  timer1.timerTime = 100;
+  clock1.display=1;
 }
 
 void loop(){
-  now = rtc.now();
-  if(old.second() != now.second()) lcdPrintDateTime(now, 0);
-
-
-  if(timerFlag){
-    TimeSpan timer(timerTime);
-    if(timerTime != oldTimer) lcdPrintTimeSpan(timer, 1);
-    timerTime--;
+  tick=millis();
+  if(tick >= (tack+1000)){
+    if(timer1.timerTime)timer1.timerTime --;
+    tack = millis();tack -= millis()%10;
   }
 
-  if(Serial.available()){
-    String dataString = Serial.readStringUntil('\n');
-    if(dataString.startsWith("kreni")){
-      stopWatchStart = millis();
-      stopWatchFlag = 1;
-    }
-    else if(dataString.startsWith("stani")){
-      stopWatchFlag = 0;
-    }
-  }
-
-  if(stopWatchFlag){
-    TimeSpan stopWatch((millis() - stopWatchStart)/1000);
-    lcdPrintTimeSpan (stopWatch, 1);
-  }
-}
-
-void lcdPrintDateTime(DateTime &time, int line){
-  old = time;
-  lcd.setCursor(0,line);
-  String dataString;
-
-  if(time.hour() < 10) dataString += '0';
-  dataString += time.hour(); dataString += ':';
-  if(time.minute() < 10) dataString += '0';
-  dataString += time.minute(); dataString += ':';
-  if(time.second() < 10) dataString += '0';
-  dataString += time.second();
-
-  if(time.second()%10 >= 0 && time.second()%10 <= 7){
-    dataString += "   ";
-    if(time.day() < 10) dataString += '0';
-    dataString += time.day(); dataString += '/';
-    if(time.month() < 10) dataString += '0';
-    dataString += time.month();
-  }
-  else{
-    dataString += "    ";
-    dataString += time.year();
-  }
-  lcd.print(dataString);
-}
-
-void lcdPrintTimeSpan(TimeSpan &time, int line){
-  lcd.setCursor(0,line);
-  String dataString;
-
-  if(time.day() > 0){
-    dataString += time.day(); dataString += ' ';
-  }
-  if(time.hour() > 0){
-    dataString += time.hour(); dataString += ':';
-  }
   
-  if(time.minute() < 10) dataString += '0';
-  dataString += time.minute(); dataString += ':';
-  if(time.second() < 10) dataString += '0';
-  dataString += time.second();
-  if(stopWatchFlag){
-    dataString += ':';
-    dataString += (millis() - stopWatchStart)%1000;
-  }
-  dataString += "  ";
-  lcd.print(dataString);
+  DateTime now, then;
+  clock1.time = rtc.now();
+  clock1.printToLcd(0);
+
+  timer1.printToLcd(1);
 }
