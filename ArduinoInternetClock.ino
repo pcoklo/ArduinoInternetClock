@@ -5,7 +5,6 @@
 #include <SPI.h>
 
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
-IPAddress ip(192, 168, 1, 177);
 
 LiquidCrystal lcd(5,7,8,9,11,12);
 EthernetServer server(80);
@@ -191,8 +190,7 @@ alarm alarm1;
 clock clock1;
 
 void setup(){
-  Serial.begin(57600);
-  Ethernet.begin(mac, ip);
+  Ethernet.begin(mac);
   server.begin();
   lcd.begin(16, 2);
   Wire.begin();
@@ -206,6 +204,8 @@ void setup(){
 
   clock1.display=1;
   clock1.printToLcd(0);
+  lcd.setCursor(0,1);
+  lcd.print(Ethernet.localIP());
 }
 
 void loop(){
