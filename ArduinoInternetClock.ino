@@ -1,16 +1,26 @@
 #include <LiquidCrystal.h>
+#include <EthernetUdp.h>
 #include <Ethernet.h>
 #include <RTClib.h>
 #include <Wire.h>
 #include <SPI.h>
 
-byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
+byte mac[] = {
+  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED
+};
 
-LiquidCrystal lcd(5,7,8,9,11,12);
+LiquidCrystal lcd(2,3,4,5,7,8);
 EthernetServer server(80);
 RTC_DS1307 rtc;
+bool clearIP=1;
+int updateTime=0;
 
 unsigned long tick, tack;
+unsigned int localPort = 8888;
+char timeServer[] = "time.nist.gov";
+const int NTP_PACKET_SIZE = 48;
+byte packetBuffer[NTP_PACKET_SIZE];
+unsigned long ntpOfset=0;
 
 struct clock{
   DateTime time, old;
@@ -79,7 +89,8 @@ struct timer{
     if(time.minute() < 10) dataString += '0';
     dataString += time.minute(); dataString += ':';
     if(time.second() < 10) dataString += '0';
-    dataString += time.second();dataString += "  ";
+    dataString += time.second();
+    while (dataString.length() <16) dataString+=' ';
 
     return dataString;
   }
@@ -124,6 +135,7 @@ struct stopwatch{
     if(milis < 10) dataString += "0";
     if(milis < 100) dataString += "0";
     dataString += milis;
+    while (dataString.length() <16) dataString+=' ';
 
     return dataString;
   }
@@ -172,6 +184,7 @@ struct alarm{
       if(time.second() < 10) dataString += '0';
       dataString += time.second();
     }
+    while (dataString.length() <16) dataString+=' ';
     return dataString;
   }
 
@@ -184,28 +197,30 @@ struct alarm{
   }
 };
 
+EthernetUDP Udp;
 stopwatch stopwatch1;
 timer timer1;
 alarm alarm1;
 clock clock1;
 
 void setup(){
-  Ethernet.begin(mac);
-  server.begin();
   lcd.begin(16, 2);
+  Serial.begin(9600);
   Wire.begin();
   rtc.begin();
-  pinMode(13,OUTPUT);
-  pinMode(4, OUTPUT);
+  pinMode(9,OUTPUT);
+  pinMode(6, OUTPUT);
   pinMode(A0, INPUT_PULLUP);
-  digitalWrite(13,HIGH);
+  digitalWrite(9,HIGH);
 
   if (!rtc.isrunning()) rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-
+  lcd.print("DHCP...");
+  lcd.setCursor(0,1);
+  Ethernet.begin(mac);
+  server.begin();
+  lcd.print(Ethernet.localIP());
   clock1.display=1;
   clock1.printToLcd(0);
-  lcd.setCursor(0,1);
-  lcd.print(Ethernet.localIP());
 }
 
 void loop(){
@@ -254,6 +269,12 @@ void loop(){
         client.println("<html>");
         client.println("Online Clock!");
         client.println("<br />");
+        if(updateTime) updateTime++;
+        if(clearIP){
+          clearIP = 0;
+          lcd.setCursor(0,1);
+          lcd.print("                ");
+        }
         if(dataString.startsWith("alarm")){
           String tempString=dataString.substring(dataString.indexOf("(")+1,dataString.indexOf(":"));
           long hour = tempString.toInt();
@@ -287,6 +308,11 @@ void loop(){
             client.println("<br />");
           }
         }
+        else if(dataString.startsWith("ntp")){
+          String tempString=dataString.substring(dataString.indexOf("(")+1,dataString.indexOf(")"));
+          ntpOfset = tempString.toInt();
+          updateTime ++;
+        }
         else if(dataString.length()){
           client.println("Wrong input: ");
           client.println(dataString);
@@ -306,16 +332,20 @@ void loop(){
   stopwatch1.printToLcd(1);
   if(alarm1.off || timer1.off){
     if(millis()%1000 < 500){
-      tone(4,5000);
-      digitalWrite(13,0);
+      tone(6,5000);
+      digitalWrite(9,0);
     }
     else {
-      noTone(4);
-      digitalWrite(13,1);
+      noTone(6);
+      digitalWrite(9,1);
     }
   }
   else{
-    noTone(4);
-    digitalWrite(13,1);
+    noTone(6);
+    digitalWrite(9,1);
+  }
+  if(updateTime == 2){
+    updateTime=0;
+    Serial.println("updateTIME");
   }
 }
