@@ -99,13 +99,16 @@ struct timer{
 
 struct stopwatch{
   unsigned long startMillis, currentMillis;
+  TimeSpan time;
   bool display = false;
+  bool enable = false;
   int line;
 
   String data(){
     String dataString;
     currentMillis = millis();
-    TimeSpan time((currentMillis - startMillis)/1000);
+    TimeSpan set((currentMillis - startMillis)/1000);
+    if(enable) time = set;
     if(time.day() > 0){
       dataString += time.day(); dataString += ' ';
     }
@@ -136,6 +139,12 @@ struct stopwatch{
 
   void start(){
     startMillis = millis();
+    enable = 1;
+  }
+
+  void stop(){
+    enable = 0;
+    display = 0;
   }
 };
 
@@ -244,6 +253,7 @@ void loop(){
         client.println("<!DOCTYPE HTML>");
         client.println("<html>");
         client.println("Online Clock!");
+        client.println("<br />");
         if(dataString.startsWith("alarm")){
           String tempString=dataString.substring(dataString.indexOf("(")+1,dataString.indexOf(":"));
           long hour = tempString.toInt();
@@ -252,6 +262,8 @@ void loop(){
           alarm1.begin(hour,minute);
           alarm1.display=1;
           alarm1.printToLcd(1);
+          client.println(alarm1.data());
+          client.println("<br />");
         }
         else if(dataString.startsWith("timer")){
           String tempString=dataString.substring(dataString.indexOf("(")+1,dataString.indexOf(")"));
@@ -259,9 +271,26 @@ void loop(){
           timer1.begin(time);
           timer1.display=1;
           timer1.printToLcd(1);
+          client.println("TIMER: ");
+          client.println(timer1.data());
+          client.println("<br />");
         }
-        else {
-          client.print("Wrong input");
+        else if(dataString.startsWith("sw")){
+          String tempString=dataString.substring(dataString.indexOf(".")+1,dataString.length());
+          if(tempString == "start"){
+            stopwatch1.start();
+            stopwatch1.display=1;
+          }
+          else if (tempString == "stop"){
+            stopwatch1.stop();
+            client.println(stopwatch1.data());
+            client.println("<br />");
+          }
+        }
+        else if(dataString.length()){
+          client.println("Wrong input: ");
+          client.println(dataString);
+          client.println("<br />");
         }
         client.println("</html>");
         break;
